@@ -15,7 +15,7 @@ func openDatabaseConnection() error {
 
 	var err error
 
-	db, err = gorm.Open("postgres", os.Getenv("POCKET_DATABASE_URL"))
+	db, err = gorm.Open("postgres", os.Getenv("DATABASE_URL"))
 	if err != nil {
 		return err
 	}
