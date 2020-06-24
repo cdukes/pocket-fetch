@@ -12,7 +12,6 @@ var (
 )
 
 func openDatabaseConnection() error {
-
 	var err error
 
 	db, err = gorm.Open("postgres", os.Getenv("POCKET_DATABASE_URL"))
@@ -23,5 +22,4 @@ func openDatabaseConnection() error {
 	db.AutoMigrate(&Article{})
 
 	return err
-
 }

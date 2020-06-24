@@ -13,22 +13,19 @@ import (
 	"time"
 )
 
-func getArticles() (map[string]Article, error) {
-
+func populateArticles(aa map[string]Article, page int) error {
 	var (
 		rr struct {
-			List map[string]Article `json:"list"`
+			List map[string]Article `json:"list,omitempty"`
 		}
 		err error
 	)
 
 	count := 1500
-	offset := 0
-	page := 1
 
 	req, err := http.NewRequest("GET", "https://getpocket.com/v3/get", nil)
 	if err != nil {
-		return rr.List, err
+		return err
 	}
 
 	q := req.URL.Query()
@@ -36,7 +33,7 @@ func getArticles() (map[string]Article, error) {
 	q.Add("access_token", os.Getenv("POCKET_ACCESS_TOKEN"))
 	q.Add("detailType", "complete")
 	q.Add("count", strconv.Itoa(count))
-	q.Add("offset", strconv.Itoa(offset))
+	q.Add("offset", strconv.Itoa(count*(page-1)))
 	q.Add("sort", "oldest")
 	q.Add("state", "all")
 
@@ -50,42 +47,42 @@ func getArticles() (map[string]Article, error) {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		return rr.List, err
+		return err
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return rr.List, errors.New("Invalid status")
+		return errors.New("Invalid status")
 	}
 
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		return rr.List, err
+		return err
 	}
 
 	err = json.Unmarshal(body, &rr)
 	if err != nil {
-		return rr.List, err
+		return err
 	}
 
-	if len(rr.List) == 0 {
-		return rr.List, errors.New("No results")
+	for _, a := range rr.List {
+		aa[a.ID] = a
 	}
 
-	return rr.List, nil
+	if len(rr.List) < count {
+		return nil
+	}
 
+	return populateArticles(aa, page+1)
 }
 
 func getDomain(s string) (string, error) {
-
 	u, err := url.Parse(s)
 	return u.Hostname(), err
-
 }
 
 func insert(a Article) {
-
 	var (
 		domain string
 		err    error
@@ -109,22 +106,27 @@ func insert(a Article) {
 
 	db.NewRecord(a)
 	db.Create(&a)
-
 }
 
 func updateArticles() {
+	aa := make(map[string]Article)
 
-	aa, err := getArticles()
+	err := populateArticles(aa, 1)
 	if err != nil {
 		log.Print(err)
 		return
 	}
 
 	for _, a := range aa {
+		count := 0
+
+		db.Model(Article{}).Where("id = ?", a.ID).Count(&count)
+
+		if count > 0 {
+			continue
+		}
+
 		log.Print("Inserting: ", a.GivenTitle)
 		insert(a)
 	}
-
-	updateArticles()
-
 }
